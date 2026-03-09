@@ -90,16 +90,22 @@ fi
 # ── Генерация ключей ───────────────────────
 log_info "Генерация ключей..."
 
-# Парсим xray x25519 по позиции строки, не по лейблу —
-# формат вывода менялся между версиями (PrivateKey / Private key / Password и т.д.)
-x25519_out=$(xray x25519)
+# xray x25519 в некоторых версиях пишет в stderr, поэтому объединяем потоки.
+# Формат вывода (v1.x–v26.x):
+#   Private key: <base64>
+#   Public key:  <base64>
+# Берём последнее поле каждой строки ($NF) — устойчиво к любым лейблам.
+x25519_out=$(xray x25519 2>&1)
 privatkey=$(echo "$x25519_out" | awk 'NR==1 {print $NF}')
 pubkey=$(echo "$x25519_out"    | awk 'NR==2 {print $NF}')
 
 if [[ -z "$privatkey" || -z "$pubkey" ]]; then
-    log_error "Не удалось получить ключи X25519 из xray x25519"
+    log_error "Не удалось получить ключи X25519. Вывод xray x25519:"
+    log_error "$x25519_out"
     exit 1
 fi
+
+log_info "Ключи X25519 успешно сгенерированы"
 
 rm -f "$KEYS_FILE"
 touch "$KEYS_FILE"
@@ -114,6 +120,14 @@ echo "PublicKey: $pubkey"               >> "$KEYS_FILE"
 uuid=$(awk -F': ' '/uuid/ {print $2}'        "$KEYS_FILE")
 privatkey=$(awk -F': ' '/PrivateKey/ {print $2}' "$KEYS_FILE")
 shortsid=$(awk -F': ' '/shortsid/ {print $2}'    "$KEYS_FILE")
+pubkey_check=$(awk -F': ' '/PublicKey/ {print $2}' "$KEYS_FILE")
+
+# Явная проверка: если PublicKey пустой — прерываемся с диагностикой
+if [[ -z "$pubkey_check" ]]; then
+    log_error "PublicKey не записан в $KEYS_FILE. Содержимое файла:"
+    cat "$KEYS_FILE" >&2
+    exit 1
+fi
 
 # ── Конфигурация Xray ──────────────────────
 log_info "Создание конфигурации..."
