@@ -225,6 +225,12 @@ CONFIG="/usr/local/etc/xray/config.json"
 KEYS_FILE="/usr/local/etc/xray/.keys"
 TMP=$(mktemp)
 
+# Запись в конфиг и рестарт службы требуют root
+if [[ $EUID -ne 0 ]]; then
+    echo "Требуются права root. Запустите: sudo newuser"
+    exit 1
+fi
+
 generate_link() {
     local email="$1" uuid="$2"
     local ip pbk sid sni protocol port
@@ -274,6 +280,12 @@ cat > /usr/local/bin/rmuser << 'SCRIPT'
 #!/bin/bash
 CONFIG="/usr/local/etc/xray/config.json"
 TMP=$(mktemp)
+
+# Запись в конфиг и рестарт службы требуют root
+if [[ $EUID -ne 0 ]]; then
+    echo "Требуются права root. Запустите: sudo rmuser"
+    exit 1
+fi
 
 emails=($(jq -r '.inbounds[0].settings.clients[].email' "$CONFIG"))
 if [[ ${#emails[@]} -eq 0 ]]; then
@@ -352,6 +364,23 @@ SCRIPT
 
 chmod +x /usr/local/bin/{userlist,mainuser,newuser,rmuser,sharelink}
 
+# ── Права доступа к файлам ─────────────────
+# Создаём группу xray если не существует, даём read-only доступ
+# к конфигу и ключам — чтобы mainuser/userlist/sharelink работали без sudo
+if ! getent group xray > /dev/null 2>&1; then
+    groupadd --system xray
+fi
+chown root:xray "$CONFIG" "$KEYS_FILE"
+chmod 640 "$CONFIG"   # root rw, xray r
+chmod 640 "$KEYS_FILE"
+
+# Добавляем текущего пользователя (если не root) в группу xray
+REAL_USER="${SUDO_USER:-}"
+if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
+    usermod -aG xray "$REAL_USER"
+    log_info "Пользователь '$REAL_USER' добавлен в группу xray (перелогиньтесь для применения)"
+fi
+
 # ── Запуск ─────────────────────────────────
 if ! systemctl restart xray; then
     log_error "Не удалось запустить Xray. Проверьте конфиг: $CONFIG"
@@ -366,9 +395,9 @@ cat > "$HOME/help" << 'EOF'
 
 Команды для управления пользователями Xray:
 
+    sudo newuser   — создать нового пользователя
+    sudo rmuser    — удалить пользователя
     mainuser  — ссылка и QR-код основного пользователя
-    newuser   — создать нового пользователя
-    rmuser    — удалить пользователя
     sharelink — получить ссылку для любого пользователя
     userlist  — список всех клиентов
 
