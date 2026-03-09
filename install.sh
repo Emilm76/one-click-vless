@@ -89,17 +89,31 @@ fi
 
 # ── Генерация ключей ───────────────────────
 log_info "Генерация ключей..."
+
+# Парсим xray x25519 по позиции строки, не по лейблу —
+# формат вывода менялся между версиями (PrivateKey / Private key / Password и т.д.)
+x25519_out=$(xray x25519)
+privatkey=$(echo "$x25519_out" | awk 'NR==1 {print $NF}')
+pubkey=$(echo "$x25519_out"    | awk 'NR==2 {print $NF}')
+
+if [[ -z "$privatkey" || -z "$pubkey" ]]; then
+    log_error "Не удалось получить ключи X25519 из xray x25519"
+    exit 1
+fi
+
 rm -f "$KEYS_FILE"
 touch "$KEYS_FILE"
 chmod 600 "$KEYS_FILE"
 
+# Сохраняем с предсказуемыми лейблами
 echo "shortsid: $(openssl rand -hex 8)" >> "$KEYS_FILE"
 echo "uuid: $(xray uuid)"               >> "$KEYS_FILE"
-xray x25519                             >> "$KEYS_FILE"
+echo "PrivateKey: $privatkey"           >> "$KEYS_FILE"
+echo "PublicKey: $pubkey"               >> "$KEYS_FILE"
 
-uuid=$(awk -F': ' '/uuid/ {print $2}' "$KEYS_FILE")
+uuid=$(awk -F': ' '/uuid/ {print $2}'        "$KEYS_FILE")
 privatkey=$(awk -F': ' '/PrivateKey/ {print $2}' "$KEYS_FILE")
-shortsid=$(awk -F': ' '/shortsid/ {print $2}' "$KEYS_FILE")
+shortsid=$(awk -F': ' '/shortsid/ {print $2}'    "$KEYS_FILE")
 
 # ── Конфигурация Xray ──────────────────────
 log_info "Создание конфигурации..."
@@ -365,14 +379,23 @@ SCRIPT
 chmod +x /usr/local/bin/{userlist,mainuser,newuser,rmuser,sharelink}
 
 # ── Права доступа к файлам ─────────────────
-# Создаём группу xray если не существует, даём read-only доступ
-# к конфигу и ключам — чтобы mainuser/userlist/sharelink работали без sudo
+# Определяем пользователя из systemd-юнита — не хардкодим,
+# так как xray может запускаться от nobody, xray, root и т.д.
+XRAY_USER=$(systemctl show xray --property=User --value 2>/dev/null)
+XRAY_USER=${XRAY_USER:-root}  # fallback на root если юнит не задаёт пользователя
+
+# Создаём группу xray если не существует — для read-only доступа
+# к конфигу без sudo (mainuser, sharelink, userlist)
 if ! getent group xray > /dev/null 2>&1; then
     groupadd --system xray
 fi
-chown root:xray "$CONFIG" "$KEYS_FILE"
-chmod 640 "$CONFIG"   # root rw, xray r
+
+# Владелец = пользователь службы, группа = xray
+chown "$XRAY_USER:xray" "$CONFIG" "$KEYS_FILE"
+chmod 640 "$CONFIG"    # owner rw, xray r
 chmod 640 "$KEYS_FILE"
+
+log_info "Файлы конфигурации: владелец '$XRAY_USER', группа 'xray'"
 
 # Добавляем текущего пользователя (если не root) в группу xray
 REAL_USER="${SUDO_USER:-}"
@@ -395,8 +418,6 @@ cat > "$HOME/help" << 'EOF'
 
 Команды для управления пользователями Xray:
 
-    sudo newuser   — создать нового пользователя
-    sudo rmuser    — удалить пользователя
     mainuser  — ссылка и QR-код основного пользователя
     sharelink — получить ссылку для любого пользователя
     userlist  — список всех клиентов
