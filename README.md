@@ -11,7 +11,7 @@
 ```bash
 git clone https://github.com/Emilm76/one-click-vless.git
 cd ./one-click-vless
-bash ./xray-install.sh
+sudo bash ./install.sh
 ```
 
 После установки автоматически выводится ссылка и QR-код для подключения основного пользователя.
