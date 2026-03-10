@@ -194,6 +194,8 @@ cat > "$CONFIG" << EOF
 }
 EOF
 
+chmod 644 "$CONFIG"
+
 # Проверяем валидность JSON
 if ! jq empty "$CONFIG" 2>/dev/null; then
     log_error "Конфиг содержит ошибки JSON"
@@ -272,7 +274,7 @@ generate_link() {
     echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=/&type=tcp&flow=xtls-rprx-vision&encryption=none#$email"
 }
 
-read -rp "Введите имя пользователя (email): " email
+read -rp "Введите имя пользователя: " email
 if [[ -z "$email" || "$email" == *" "* ]]; then
     echo "Имя не может быть пустым или содержать пробелы."
     exit 1
@@ -287,7 +289,7 @@ fi
 uuid=$(xray uuid)
 jq --arg email "$email" --arg uuid "$uuid" \
     '.inbounds[0].settings.clients += [{"email": $email, "id": $uuid, "flow": "xtls-rprx-vision"}]' \
-    "$CONFIG" > "$TMP" && mv "$TMP" "$CONFIG"
+    "$CONFIG" > "$TMP" && chmod 644 "$TMP" && mv "$TMP" "$CONFIG"
 
 if ! systemctl restart xray; then
     echo "Ошибка: не удалось перезапустить Xray. Проверьте конфиг."
@@ -335,7 +337,7 @@ fi
 selected="${emails[$((choice - 1))]}"
 jq --arg email "$selected" \
     '(.inbounds[0].settings.clients) |= map(select(.email != $email))' \
-    "$CONFIG" > "$TMP" && mv "$TMP" "$CONFIG"
+    "$CONFIG" > "$TMP" && chmod 644 "$TMP" && mv "$TMP" "$CONFIG"
 
 if ! systemctl restart xray; then
     echo "Ошибка: не удалось перезапустить Xray."
