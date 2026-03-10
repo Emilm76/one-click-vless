@@ -392,32 +392,6 @@ SCRIPT
 
 chmod +x /usr/local/bin/{userlist,mainuser,newuser,rmuser,sharelink}
 
-# ── Права доступа к файлам ─────────────────
-# Определяем пользователя из systemd-юнита — не хардкодим,
-# так как xray может запускаться от nobody, xray, root и т.д.
-XRAY_USER=$(systemctl show xray --property=User --value 2>/dev/null)
-XRAY_USER=${XRAY_USER:-root}  # fallback на root если юнит не задаёт пользователя
-
-# Создаём группу xray если не существует — для read-only доступа
-# к конфигу без sudo (mainuser, sharelink, userlist)
-if ! getent group xray > /dev/null 2>&1; then
-    groupadd --system xray
-fi
-
-# Владелец = пользователь службы, группа = xray
-chown "$XRAY_USER:xray" "$CONFIG" "$KEYS_FILE"
-chmod 640 "$CONFIG"    # owner rw, xray r
-chmod 640 "$KEYS_FILE"
-
-log_info "Файлы конфигурации: владелец '$XRAY_USER', группа 'xray'"
-
-# Добавляем текущего пользователя (если не root) в группу xray
-REAL_USER="${SUDO_USER:-}"
-if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
-    usermod -aG xray "$REAL_USER"
-    log_info "Пользователь '$REAL_USER' добавлен в группу xray (перелогиньтесь для применения)"
-fi
-
 # ── Запуск ─────────────────────────────────
 if ! systemctl restart xray; then
     log_error "Не удалось запустить Xray. Проверьте конфиг: $CONFIG"
@@ -432,6 +406,8 @@ cat > "$HOME/help" << 'EOF'
 
 Команды для управления пользователями Xray:
 
+    newuser   — создать нового пользователя
+    rmuser    — удалить пользователя
     mainuser  — ссылка и QR-код основного пользователя
     sharelink — получить ссылку для любого пользователя
     userlist  — список всех клиентов
