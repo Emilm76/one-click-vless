@@ -48,7 +48,7 @@ generate_link() {
     port=$(jq -r '.inbounds[0].port' "$CONFIG")
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
 
-    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
+    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")&type=xhttp&encryption=none#$email"
 }
 
 check_root
@@ -133,7 +133,7 @@ cat > "$CONFIG" << EOF
                     {
                         "email": "main",
                         "id": "$uuid",
-                        "flow": "xtls-rprx-vision"
+                        "flow": ""
                     }
                 ],
                 "decryption": "none"
@@ -257,7 +257,7 @@ generate_link() {
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
     local enc_path
     enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")
-    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
+    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&encryption=none#$email"
 }
 
 uuid=$(awk -F': ' '/uuid/ {print $2}' "$KEYS_FILE")
@@ -294,7 +294,7 @@ generate_link() {
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
     local enc_path
     enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")
-    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
+    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&encryption=none#$email"
 }
 
 read -rp "Введите имя пользователя: " email
@@ -311,7 +311,7 @@ fi
 
 uuid=$(xray uuid)
 jq --arg email "$email" --arg uuid "$uuid" \
-    '.inbounds[0].settings.clients += [{"email": $email, "id": $uuid, "flow": "xtls-rprx-vision"}]' \
+    '.inbounds[0].settings.clients += [{"email": $email, "id": $uuid, "flow": ""}]' \
     "$CONFIG" > "$TMP" && chmod 644 "$TMP" && mv "$TMP" "$CONFIG"
 
 if ! systemctl restart xray; then
@@ -385,7 +385,7 @@ generate_link() {
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
     local enc_path
     enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")
-    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
+    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&encryption=none#$email"
 }
 
 emails=($(jq -r '.inbounds[0].settings.clients[].email' "$CONFIG"))
