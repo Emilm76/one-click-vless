@@ -4,23 +4,15 @@
 
 ## Требования
 
-- Сервер с Ubuntu 22+ / Debian 11+
+- Сервер с Debian/Ubuntu
 
 ## Установка
 
 ```bash
-git clone https://github.com/Emilm76/one-click-vless.git
-cd ./one-click-vless
-sudo bash ./install.sh
+curl -fsSL https://raw.githubusercontent.com/Emilm76/one-click-vless/refs/heads/main/install.sh | sudo bash
 ```
 
 После установки автоматически выводится ссылка и QR-код для подключения основного пользователя.
-
-**Удаление**
-
-```bash
-sudo bash ./uninstall.sh
-```
 
 ## Управление пользователями
 
