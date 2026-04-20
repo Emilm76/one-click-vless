@@ -2,13 +2,6 @@
 
 set -e
 
-REPO_URL="https://raw.githubusercontent.com/Emilm76/one-click-vless/refs/heads/main/install.sh"
-
-if [[ "${SELF_EXEC:-0}" != "1" ]]; then
-    SELF_EXEC=1 bash <(curl -fsSL "$REPO_URL")
-    exit $?
-fi
-
 PORT=443
 SNI="github.com"
 XHTTP_PATH="/$(openssl rand -hex 8)"
@@ -55,11 +48,37 @@ generate_link() {
     port=$(jq -r '.inbounds[0].port' "$CONFIG")
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
 
-    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
+    echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$(printf '%s' "$path" | python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))")&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
 }
 
 check_root
 check_reinstall
+
+# Ask the operator for IPs to whitelist in fail2ban (optional).
+# This replaces the previously hardcoded author IP.
+ask_whitelist_ip() {
+    echo ""
+    log_info "Настройка белого списка fail2ban (необязательно)."
+    log_info "Укажите IP-адреса, которые никогда не будут заблокированы (например, ваш домашний IP)."
+    log_info "Введите адреса через пробел, или нажмите Enter, чтобы пропустить."
+    read -rp "IP для белого списка: " WHITELIST_INPUT
+
+    FAIL2BAN_IGNOREIP="127.0.0.1/8 ::1"
+    if [[ -n "$WHITELIST_INPUT" ]]; then
+        # Validate: accept only IPv4, IPv6, and CIDR entries; reject everything else.
+        for entry in $WHITELIST_INPUT; do
+            if [[ "$entry" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]] || \
+               [[ "$entry" =~ ^[0-9a-fA-F:]+(/[0-9]{1,3})?$ ]]; then
+                FAIL2BAN_IGNOREIP+=" $entry"
+            else
+                log_warn "Пропущена невалидная запись: '$entry'"
+            fi
+        done
+    fi
+    log_info "Белый список fail2ban: $FAIL2BAN_IGNOREIP"
+}
+
+ask_whitelist_ip
 
 log_info "Будет установлен Vless с транспортом XHTTP"
 sleep 2
@@ -183,7 +202,7 @@ cat > "$CONFIG" << EOF
 }
 EOF
 
-chmod 644 "$CONFIG"
+chmod 600 "$CONFIG"
 
 if ! jq empty "$CONFIG" 2>/dev/null; then
     log_error "Конфиг содержит ошибки JSON"
@@ -200,9 +219,9 @@ ufw --force enable
 log_info "UFW настроен"
 
 log_info "Настройка fail2ban..."
-cat > /etc/fail2ban/jail.d/xray.conf << 'F2B'
+cat > /etc/fail2ban/jail.d/xray.conf << F2B
 [DEFAULT]
-ignoreip = 89.221.227.34
+ignoreip = ${FAIL2BAN_IGNOREIP}
 
 [sshd]
 enabled  = true
@@ -263,7 +282,7 @@ generate_link() {
     port=$(jq -r '.inbounds[0].port' "$CONFIG")
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
     local enc_path
-    enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")
+    enc_path=$(printf '%s' "$path" | python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))")
     echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
 }
 
@@ -300,7 +319,7 @@ generate_link() {
     port=$(jq -r '.inbounds[0].port' "$CONFIG")
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
     local enc_path
-    enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")
+    enc_path=$(printf '%s' "$path" | python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))")
     echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
 }
 
@@ -319,7 +338,7 @@ fi
 uuid=$(xray uuid)
 jq --arg email "$email" --arg uuid "$uuid" \
     '.inbounds[0].settings.clients += [{"email": $email, "id": $uuid, "flow": "xtls-rprx-vision"}]' \
-    "$CONFIG" > "$TMP" && chmod 644 "$TMP" && mv "$TMP" "$CONFIG"
+    "$CONFIG" > "$TMP" && chmod 600 "$TMP" && mv "$TMP" "$CONFIG"
 
 if ! systemctl restart xray; then
     echo "Ошибка: не удалось перезапустить Xray. Проверьте конфиг."
@@ -365,7 +384,7 @@ fi
 selected="${emails[$((choice - 1))]}"
 jq --arg email "$selected" \
     '(.inbounds[0].settings.clients) |= map(select(.email != $email))' \
-    "$CONFIG" > "$TMP" && chmod 644 "$TMP" && mv "$TMP" "$CONFIG"
+    "$CONFIG" > "$TMP" && chmod 600 "$TMP" && mv "$TMP" "$CONFIG"
 
 if ! systemctl restart xray; then
     echo "Ошибка: не удалось перезапустить Xray."
@@ -391,7 +410,7 @@ generate_link() {
     port=$(jq -r '.inbounds[0].port' "$CONFIG")
     path=$(jq -r '.inbounds[0].streamSettings.xhttpSettings.path' "$CONFIG")
     local enc_path
-    enc_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$path'))")
+    enc_path=$(printf '%s' "$path" | python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))")
     echo "$protocol://$uuid@$ip:$port?security=reality&sni=$sni&fp=firefox&pbk=$pbk&sid=$sid&spx=$enc_path&type=xhttp&flow=xtls-rprx-vision&encryption=none#$email"
 }
 
