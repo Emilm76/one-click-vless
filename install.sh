@@ -201,19 +201,22 @@ log_info "UFW настроен"
 
 log_info "Настройка fail2ban..."
 cat > /etc/fail2ban/jail.d/xray.conf << 'F2B'
+[DEFAULT]
+ignoreip = 89.221.227.34
+
 [sshd]
 enabled  = true
 port     = ssh
-maxretry = 5
-bantime  = 3600
 findtime = 600
+maxretry = 3
+bantime = 43200
 
 [xray-auth]
 enabled  = true
 port     = 443
 logpath  = /var/log/xray/access.log
 maxretry = 10
-bantime  = 3600
+bantime  = 43200
 findtime = 300
 filter   = xray-auth
 F2B
